@@ -1,0 +1,19 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+Thumbs.db
+
+# Sensitive credentials — never commit
+something for robinhood.txt
+
+# Old compiled bundles (replaced by src/)
+2.0/
+assets/
+200.html
+index.html.html
+manifest.json
+sw.js
+
+# Claude internal config
+.claude/
