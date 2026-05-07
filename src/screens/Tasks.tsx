@@ -94,20 +94,25 @@ function SwipeableTask({ task, onComplete, onDelete, onEdit }: {
   onEdit: () => void
 }) {
   const startX = useRef(0)
-  const elRef = useRef<HTMLDivElement>(null)
+  const didSwipe = useRef(false)
   const [offset, setOffset] = useState(0)
   const [swiped, setSwiped] = useState<'left' | 'right' | null>(null)
 
-  const onTouchStart = (e: React.TouchEvent) => { startX.current = e.touches[0]!.clientX }
+  const onTouchStart = (e: React.TouchEvent) => {
+    startX.current = e.touches[0]!.clientX
+    didSwipe.current = false
+  }
   const onTouchMove = (e: React.TouchEvent) => {
     const dx = e.touches[0]!.clientX - startX.current
     setOffset(Math.max(-80, Math.min(80, dx)))
   }
   const onTouchEnd = () => {
     if (offset < -60) {
+      didSwipe.current = true
       setSwiped('left')
       setTimeout(onDelete, 300)
     } else if (offset > 60) {
+      didSwipe.current = true
       setSwiped('right')
       setTimeout(onComplete, 300)
     }
@@ -131,11 +136,10 @@ function SwipeableTask({ task, onComplete, onDelete, onEdit }: {
       </div>
 
       <div
-        ref={elRef}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        onClick={onEdit}
+        onClick={() => { if (didSwipe.current) { didSwipe.current = false; return }; onEdit() }}
         className="card"
         style={{
           transform: swiped ? `translateX(${swiped === 'left' ? '-100%' : '100%'})` : `translateX(${offset}px)`,

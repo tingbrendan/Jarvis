@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSettingsStore } from './store'
 import { BottomNav } from './components/BottomNav'
 import { ToastProvider } from './components/Toast'
@@ -251,24 +251,24 @@ export default function App() {
   const { isSetup, settings } = useSettingsStore()
   const [unlocked, setUnlocked] = useState(!isSetup)
   const [tab, setTab] = useState<Tab>('home')
-  const [lastActive, setLastActive] = useState(Date.now())
+  const hiddenAt = useRef<number | null>(null)
 
-  // Auto-lock on inactivity
+  // Auto-lock: record when app goes to background, lock if away > timeout
   useEffect(() => {
     if (!isSetup) return
     const check = () => {
-      if (document.hidden && Date.now() - lastActive > LOCK_TIMEOUT) {
-        setUnlocked(false)
+      if (document.hidden) {
+        hiddenAt.current = Date.now()
+      } else {
+        if (hiddenAt.current !== null && Date.now() - hiddenAt.current > LOCK_TIMEOUT) {
+          setUnlocked(false)
+        }
+        hiddenAt.current = null
       }
     }
-    const updateActivity = () => setLastActive(Date.now())
     document.addEventListener('visibilitychange', check)
-    document.addEventListener('touchstart', updateActivity, { passive: true })
-    return () => {
-      document.removeEventListener('visibilitychange', check)
-      document.removeEventListener('touchstart', updateActivity)
-    }
-  }, [isSetup, lastActive])
+    return () => document.removeEventListener('visibilitychange', check)
+  }, [isSetup])
 
   // Request notification permission on first setup complete
   useEffect(() => {

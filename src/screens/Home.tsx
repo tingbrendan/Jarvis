@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTasksStore, useEventsStore, useHabitsStore, todayISO, formatTime } from '../store'
 import { QuickCapture } from '../components/QuickCapture'
+import { Sheet } from '../components/Sheet'
 import { showToast } from '../components/Toast'
 import type { Tab } from '../App'
 
@@ -26,6 +27,8 @@ export function Home({ onNavigate }: Props) {
   const day = getDay(today)
 
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+  const [sleepOpen, setSleepOpen] = useState(false)
+  const [sleepInput, setSleepInput] = useState('')
 
   const todayTasks = tasks.filter((t) => t.status !== 'done' && (!t.dueDate || t.dueDate <= today))
   const upcomingEvents = events
@@ -89,10 +92,7 @@ export function Home({ onNavigate }: Props) {
             label={day.sleep > 0 ? `${day.sleep}h` : '—'}
             subLabel="sleep"
             active={day.sleep >= 7}
-            onClick={() => {
-              const h = Number(prompt('Hours of sleep last night?'))
-              if (h > 0) { logHabit(today, { sleep: h }); showToast(`😴 ${h}h logged`) }
-            }}
+            onClick={() => { setSleepInput(day.sleep > 0 ? String(day.sleep) : ''); setSleepOpen(true) }}
           />
         </div>
 
@@ -169,6 +169,26 @@ export function Home({ onNavigate }: Props) {
 
         <div style={{ height: 8 }} />
       </div>
+
+      <Sheet open={sleepOpen} onClose={() => setSleepOpen(false)} title="Log Sleep" height="40vh">
+        <div className="col" style={{ gap: 14, alignItems: 'center' }}>
+          <p style={{ color: 'var(--t3)', fontSize: '0.875rem' }}>How many hours did you sleep?</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <button className="btn btn-ghost" style={{ width: 52, height: 52, fontSize: '1.5rem', borderRadius: '50%' }}
+              onClick={() => setSleepInput(String(Math.max(0, parseFloat(sleepInput || '0') - 0.5)))}>−</button>
+            <span style={{ fontSize: '2.5rem', fontWeight: 700, minWidth: 80, textAlign: 'center' }}>
+              {sleepInput || '0'}h
+            </span>
+            <button className="btn btn-ghost" style={{ width: 52, height: 52, fontSize: '1.5rem', borderRadius: '50%' }}
+              onClick={() => setSleepInput(String(Math.min(14, parseFloat(sleepInput || '0') + 0.5)))}>+</button>
+          </div>
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => {
+            const h = parseFloat(sleepInput)
+            if (h > 0) { logHabit(today, { sleep: h }); showToast(`😴 ${h}h logged`) }
+            setSleepOpen(false)
+          }}>Save</button>
+        </div>
+      </Sheet>
     </div>
   )
 }

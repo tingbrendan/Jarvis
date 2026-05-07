@@ -51,9 +51,12 @@ export function QuickCapture() {
           messages: [{ role: 'user', content: val }],
         }),
       })
+      if (!res.ok) throw new Error(`API ${res.status}`)
       const json = await res.json() as { content?: { text: string }[] }
       const raw = json.content?.[0]?.text ?? ''
-      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as { type: string; data: Record<string, unknown> }
+      const jsonMatch = raw.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('No JSON in response')
+      const parsed = JSON.parse(jsonMatch[0]) as { type: string; data: Record<string, unknown> }
       dispatch(parsed.type, parsed.data, val)
     } catch {
       routeLocally(val)

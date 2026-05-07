@@ -112,6 +112,8 @@ function TrackView() {
   const today = todayISO()
   const day = getDay(today)
   const [timeForm, setTimeForm] = useState({ module: settings.workModules[0] ?? 'Personal', hours: '' })
+  const [sleepOpen, setSleepOpen] = useState(false)
+  const [sleepInput, setSleepInput] = useState('')
 
   const todayTime = timeLog.filter((e) => e.date === today)
   const totalHours = todayTime.reduce((a, e) => a + e.hours, 0)
@@ -134,10 +136,7 @@ function TrackView() {
             <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{day.sleep > 0 ? `${day.sleep}h` : '—'}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--t3)', marginBottom: 10 }}>sleep</div>
             <button className="btn btn-ghost btn-sm" style={{ width: '100%' }}
-              onClick={() => {
-                const h = Number(prompt('Hours of sleep?'))
-                if (h > 0) logHabit(today, { sleep: h })
-              }}>Log</button>
+              onClick={() => { setSleepInput(day.sleep > 0 ? String(day.sleep) : ''); setSleepOpen(true) }}>Log</button>
           </div>
         </div>
         <div className="card" style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -184,6 +183,26 @@ function TrackView() {
           </div>
         ))}
       </div>
+
+      <Sheet open={sleepOpen} onClose={() => setSleepOpen(false)} title="Log Sleep" height="40vh">
+        <div className="col" style={{ gap: 14, alignItems: 'center' }}>
+          <p style={{ color: 'var(--t3)', fontSize: '0.875rem' }}>How many hours did you sleep?</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <button className="btn btn-ghost" style={{ width: 52, height: 52, fontSize: '1.5rem', borderRadius: '50%' }}
+              onClick={() => setSleepInput(String(Math.max(0, parseFloat(sleepInput || '0') - 0.5)))}>−</button>
+            <span style={{ fontSize: '2.5rem', fontWeight: 700, minWidth: 80, textAlign: 'center' }}>
+              {sleepInput || '0'}h
+            </span>
+            <button className="btn btn-ghost" style={{ width: 52, height: 52, fontSize: '1.5rem', borderRadius: '50%' }}
+              onClick={() => setSleepInput(String(Math.min(14, parseFloat(sleepInput || '0') + 0.5)))}>+</button>
+          </div>
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => {
+            const h = parseFloat(sleepInput)
+            if (h > 0) { logHabit(today, { sleep: h }); showToast(`😴 ${h}h logged`) }
+            setSleepOpen(false)
+          }}>Save</button>
+        </div>
+      </Sheet>
     </div>
   )
 }
@@ -199,7 +218,7 @@ function ReviewView() {
     return d.toISOString().slice(0, 10)
   }).reverse()
 
-  const completedThisWeek = tasks.filter((t) => t.status === 'done').length
+  const completedThisWeek = tasks.filter((t) => t.status === 'done' && last7.includes(t.createdAt.slice(0, 10))).length
   const avgWater = last7.reduce((a, date) => {
     const d = days.find((x) => x.date === date)
     return a + (d?.water ?? 0)
@@ -234,7 +253,7 @@ function ReviewView() {
       <div style={{ display: 'flex', gap: 6, justifyContent: 'space-between' }}>
         {last7.map((date) => {
           const d = days.find((x) => x.date === date)
-          const score = [d?.water ?? 0 >= 6, d?.workout, (d?.sleep ?? 0) >= 7].filter(Boolean).length
+          const score = [(d?.water ?? 0) >= 6, d?.workout, (d?.sleep ?? 0) >= 7].filter(Boolean).length
           return (
             <div key={date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <div style={{
@@ -261,6 +280,7 @@ function AiView() {
   const [loading, setLoading] = useState(false)
 
   const send = async () => {
+    if (loading) return
     const text = input.trim()
     if (!text || !settings.claudeApiKey) {
       if (!settings.claudeApiKey) showToast('Add API key in Settings first')
