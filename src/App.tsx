@@ -44,23 +44,31 @@ function Setup() {
   return (
     <div style={{
       height: '100%', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', padding: 32,
+      alignItems: 'center', justifyContent: 'center',
+      padding: '24px 32px',
     }}>
       <div style={{ fontSize: '2rem', marginBottom: 8 }}>🛡</div>
       <h1 style={{ marginBottom: 6 }}>JARVIS</h1>
-      <p style={{ color: 'var(--t3)', marginBottom: 32, textAlign: 'center', fontSize: '0.9rem' }}>
-        {step === 'create' ? 'Create a 4-digit PIN to secure your data' : 'Confirm your PIN'}
+      <p style={{ color: 'var(--t3)', marginBottom: 28, textAlign: 'center', fontSize: '0.875rem' }}>
+        {step === 'create' ? 'Create a 4-digit PIN' : 'Confirm your PIN'}
       </p>
 
       <PinDots count={dots.length} />
 
-      {err && <p style={{ color: 'var(--red)', fontSize: '0.85rem', marginTop: 12 }}>{err}</p>}
+      {err && <p style={{ color: 'var(--red)', fontSize: '0.85rem', marginBottom: 12, marginTop: -20 }}>{err}</p>}
 
       <Numpad onDigit={handleDigit} onDelete={() => {
         if (step === 'create') setPin(pin.slice(0, -1))
         else setConfirm(confirm.slice(0, -1))
         setErr('')
       }} />
+
+      {step === 'confirm' && (
+        <button onClick={() => { setStep('create'); setPin(''); setConfirm(''); setErr('') }}
+          style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: '0.78rem', cursor: 'pointer', marginTop: 16, padding: '4px 8px' }}>
+          ← Start over
+        </button>
+      )}
     </div>
   )
 }
@@ -128,31 +136,48 @@ function Lock({ onUnlock }: { onUnlock: () => void }) {
     }
   }
 
+  const resetApp = () => {
+    if (window.confirm('This will erase all your data and reset the PIN. Continue?')) {
+      Object.keys(localStorage).filter(k => k.startsWith('jarvis-')).forEach(k => localStorage.removeItem(k))
+      window.location.reload()
+    }
+  }
+
   return (
     <div style={{
       height: '100%', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', padding: 32,
+      alignItems: 'center', justifyContent: 'center',
+      padding: '24px 32px', gap: 0,
     }}>
       <div style={{ fontSize: '2rem', marginBottom: 8 }}>🔒</div>
-      <h1 style={{ marginBottom: 32 }}>JARVIS</h1>
+      <h1 style={{ marginBottom: 8 }}>JARVIS</h1>
+      <p style={{ color: 'var(--t3)', fontSize: '0.85rem', marginBottom: 28 }}>Enter your PIN</p>
 
       <div style={{ animation: shake ? 'shake 0.5s' : 'none' }}>
         <PinDots count={input.length} error={err} />
       </div>
 
-      {err && <p style={{ color: 'var(--red)', fontSize: '0.85rem', marginTop: 12 }}>Incorrect PIN</p>}
+      {err && <p style={{ color: 'var(--red)', fontSize: '0.85rem', marginBottom: 12, marginTop: -20 }}>Incorrect PIN</p>}
 
       <Numpad onDigit={handleDigit} onDelete={() => setInput(input.slice(0, -1))} />
 
-      {settings.biometricEnabled ? (
-        <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={tryBiometric}>
-          Use Face ID / Biometric
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginTop: 20 }}>
+        {settings.biometricEnabled ? (
+          <button className="btn btn-ghost" onClick={tryBiometric}>
+            Use Face ID / Biometric
+          </button>
+        ) : (
+          <button className="btn btn-ghost btn-sm" onClick={enableBiometric}>
+            Enable Face ID
+          </button>
+        )}
+        <button onClick={resetApp} style={{
+          background: 'none', border: 'none', color: 'var(--t3)',
+          fontSize: '0.78rem', cursor: 'pointer', padding: '4px 8px',
+        }}>
+          Forgot PIN? Reset app
         </button>
-      ) : (
-        <button className="btn btn-ghost btn-sm" style={{ marginTop: 16 }} onClick={enableBiometric}>
-          Enable Face ID
-        </button>
-      )}
+      </div>
 
       <style>{`@keyframes shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }`}</style>
     </div>
@@ -163,13 +188,13 @@ function Lock({ onUnlock }: { onUnlock: () => void }) {
 
 function PinDots({ count, error = false }: { count: number; error?: boolean }) {
   return (
-    <div style={{ display: 'flex', gap: 16, marginBottom: 32 }}>
+    <div style={{ display: 'flex', gap: 20, marginBottom: 36 }}>
       {[0,1,2,3].map((i) => (
         <div key={i} style={{
-          width: 16, height: 16, borderRadius: '50%',
+          width: 20, height: 20, borderRadius: '50%',
           background: i < count ? (error ? 'var(--red)' : 'var(--accent)') : 'var(--border-active)',
           transition: 'background 0.15s, transform 0.1s',
-          transform: i < count ? 'scale(1.15)' : 'scale(1)',
+          transform: i < count ? 'scale(1.2)' : 'scale(1)',
         }} />
       ))}
     </div>
@@ -179,15 +204,23 @@ function PinDots({ count, error = false }: { count: number; error?: boolean }) {
 function Numpad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDelete: () => void }) {
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫']
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 8 }}>
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: 14, marginTop: 8, width: '100%', maxWidth: 300,
+    }}>
       {keys.map((k, i) =>
         k === '' ? <div key={i} /> :
-        <button key={k + i} onClick={() => k === '⌫' ? onDelete() : onDigit(k)} style={{
-          background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 12,
-          height: 64, fontSize: k === '⌫' ? '1.2rem' : '1.4rem', fontWeight: 600,
-          cursor: 'pointer', color: 'var(--t1)', fontFamily: 'var(--font)',
-          transition: 'transform 0.1s, background 0.1s',
-        }}
+        <button
+          key={k + i}
+          onClick={() => k === '⌫' ? onDelete() : onDigit(k)}
+          style={{
+            background: 'var(--bg-2)', border: '1px solid var(--border)',
+            borderRadius: 16, height: 80,
+            fontSize: k === '⌫' ? '1.4rem' : '1.7rem', fontWeight: 600,
+            cursor: 'pointer', color: 'var(--t1)', fontFamily: 'var(--font)',
+            transition: 'background 0.1s',
+            WebkitTapHighlightColor: 'transparent',
+          }}
           onTouchStart={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-4)' }}
           onTouchEnd={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-2)' }}
         >{k}</button>
