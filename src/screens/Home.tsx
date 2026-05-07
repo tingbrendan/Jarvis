@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useTasksStore, useEventsStore, useHabitsStore, todayISO, formatTime } from '../store'
+import { useTasksStore, useEventsStore, useHabitsStore, useSettingsStore, todayISO, formatTime } from '../store'
 import { QuickCapture } from '../components/QuickCapture'
+import { RobinhoodTile } from '../components/RobinhoodTile'
 import { Sheet } from '../components/Sheet'
 import { showToast } from '../components/Toast'
 import type { Tab } from '../App'
@@ -24,6 +25,7 @@ export function Home({ onNavigate }: Props) {
   const completeTask = useTasksStore((s) => s.completeTask)
   const events = useEventsStore((s) => s.events)
   const { getDay, logHabit } = useHabitsStore()
+  const { settings } = useSettingsStore()
   const day = getDay(today)
 
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
@@ -95,6 +97,13 @@ export function Home({ onNavigate }: Props) {
             onClick={() => { setSleepInput(day.sleep > 0 ? String(day.sleep) : ''); setSleepOpen(true) }}
           />
         </div>
+
+        {/* Robinhood portfolio */}
+        <RobinhoodTile
+          apiKey={settings.rhApiKey}
+          privateKey={settings.rhPrivateKey}
+          onOpenSettings={() => onNavigate('more')}
+        />
 
         {/* Tasks due today */}
         <div className="section-header">

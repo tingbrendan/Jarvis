@@ -73,6 +73,9 @@ export function QuickCapture() {
     } else if (lower.startsWith('note:') || lower.startsWith('note ')) {
       addNote({ text: val.replace(/^note[:\s]*/i, ''), type: 'life', category: 'General' })
       showToast('✎ Note saved')
+    } else if (lower.startsWith('event:') || lower.startsWith('event ')) {
+      addEvent({ title: val.replace(/^event[:\s]*/i, ''), date: todayISO(), time: undefined, recurring: null })
+      showToast('▦ Event added')
     } else {
       addTask({ title: val, module: 'Personal', priority: 'medium', status: 'todo' })
       showToast('✓ Task added')

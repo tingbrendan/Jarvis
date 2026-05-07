@@ -362,6 +362,8 @@ function SettingsView() {
   const { settings, updateSettings } = useSettingsStore()
   const [apiKey, setApiKey] = useState(settings.claudeApiKey)
   const [modules, setModules] = useState(settings.workModules.join(', '))
+  const [rhApiKey, setRhApiKey] = useState(settings.rhApiKey)
+  const [rhPrivateKey, setRhPrivateKey] = useState(settings.rhPrivateKey)
 
   return (
     <div className="col" style={{ gap: 16 }}>
@@ -388,6 +390,48 @@ function SettingsView() {
             showToast('Modules updated')
           }}>
           Save Modules
+        </button>
+      </div>
+
+      <div className="divider" />
+
+      {/* Robinhood API credentials */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: '1.1rem' }}>📈</span>
+          <span style={{ fontSize: '0.8rem', color: 'var(--t3)', fontWeight: 600 }}>ROBINHOOD API</span>
+        </div>
+        <label style={{ fontSize: '0.75rem', color: 'var(--t3)', display: 'block', marginBottom: 4 }}>
+          API KEY (from Robinhood → Account → API)
+        </label>
+        <input
+          type="password"
+          value={rhApiKey}
+          onChange={(e) => setRhApiKey(e.target.value)}
+          placeholder="rh-api-…"
+          style={{ marginBottom: 8 }}
+        />
+        <label style={{ fontSize: '0.75rem', color: 'var(--t3)', display: 'block', marginBottom: 4 }}>
+          PRIVATE KEY (base64 Ed25519)
+        </label>
+        <input
+          type="password"
+          value={rhPrivateKey}
+          onChange={(e) => setRhPrivateKey(e.target.value)}
+          placeholder="base64-encoded private key…"
+          style={{ marginBottom: 8 }}
+        />
+        <button
+          className="btn btn-ghost"
+          style={{ width: '100%' }}
+          onClick={() => {
+            updateSettings({ rhApiKey: rhApiKey.trim(), rhPrivateKey: rhPrivateKey.trim() })
+            // Clear stale cache so tile refetches immediately
+            localStorage.removeItem('jarvis-rh-cache')
+            showToast('📈 Robinhood credentials saved')
+          }}
+        >
+          Save Robinhood Keys
         </button>
       </div>
 

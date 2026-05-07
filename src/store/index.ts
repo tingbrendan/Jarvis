@@ -72,6 +72,8 @@ export interface Settings {
   accentColor: string
   notificationsEnabled: boolean
   workModules: string[]
+  rhApiKey: string
+  rhPrivateKey: string
 }
 
 // ─── Tasks Store ─────────────────────────────────────────────────────────────
@@ -265,6 +267,8 @@ export const useSettingsStore = create<SettingsState>()(
         accentColor: '#7c6af7',
         notificationsEnabled: false,
         workModules: ['JIRA Triage', 'Meetings', 'Training', 'Admin', 'Python', 'Infrastructure'],
+        rhApiKey: '',
+        rhPrivateKey: '',
       },
       isSetup: false,
       updateSettings: (patch) =>
