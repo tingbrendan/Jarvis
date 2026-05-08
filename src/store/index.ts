@@ -73,7 +73,9 @@ export interface Settings {
   notificationsEnabled: boolean
   workModules: string[]
   rhApiKey: string
-  rhPrivateKey: string
+  // rhPrivateKey intentionally NOT stored here — lives in sessionStorage only
+  aiContextEnabled: boolean   // opt-in: send task/habit/portfolio data to AI
+  aboutMe: string             // injected into every AI prompt as personal context
 }
 
 // ─── Tasks Store ─────────────────────────────────────────────────────────────
@@ -268,7 +270,8 @@ export const useSettingsStore = create<SettingsState>()(
         notificationsEnabled: false,
         workModules: ['JIRA Triage', 'Meetings', 'Training', 'Admin', 'Python', 'Infrastructure'],
         rhApiKey: '',
-        rhPrivateKey: '',
+        aiContextEnabled: false,
+        aboutMe: '',
       },
       isSetup: false,
       updateSettings: (patch) =>

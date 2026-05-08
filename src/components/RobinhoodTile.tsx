@@ -2,7 +2,6 @@ import { useRobinhood } from '../hooks/useRobinhood'
 
 interface Props {
   apiKey: string
-  privateKey: string
   onOpenSettings: () => void
 }
 
@@ -17,8 +16,8 @@ function fmtAge(ms: number) {
   return `${Math.floor(mins / 60)}h ago`
 }
 
-export function RobinhoodTile({ apiKey, privateKey, onOpenSettings }: Props) {
-  const { data, status, error, refresh } = useRobinhood(apiKey, privateKey)
+export function RobinhoodTile({ apiKey, onOpenSettings }: Props) {
+  const { data, status, error, refresh } = useRobinhood(apiKey)
 
   // ── Unconfigured state ──────────────────────────────────────────────────────
   if (status === 'unconfigured') {

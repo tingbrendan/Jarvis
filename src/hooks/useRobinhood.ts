@@ -89,12 +89,21 @@ async function fetchRh(apiKey: string, privateKey: string): Promise<RhPortfolio>
 
 export type RhStatus = 'idle' | 'loading' | 'ok' | 'error' | 'unconfigured'
 
-export function useRobinhood(apiKey: string, privateKey: string) {
+// Helpers for session-only private key (never persisted to localStorage)
+export const rhSession = {
+  getPrivateKey: () => sessionStorage.getItem('jarvis-rh-pk') ?? '',
+  setPrivateKey: (key: string) => { if (key) sessionStorage.setItem('jarvis-rh-pk', key) },
+  hasKey: () => !!sessionStorage.getItem('jarvis-rh-pk'),
+  clear: () => sessionStorage.removeItem('jarvis-rh-pk'),
+}
+
+export function useRobinhood(apiKey: string) {
   const [data, setData] = useState<RhPortfolio | null>(null)
   const [status, setStatus] = useState<RhStatus>('idle')
   const [error, setError] = useState('')
 
   const load = useCallback(async (force = false) => {
+    const privateKey = rhSession.getPrivateKey()
     if (!apiKey || !privateKey) { setStatus('unconfigured'); return }
 
     // Check cache
@@ -111,7 +120,7 @@ export function useRobinhood(apiKey: string, privateKey: string) {
 
     setStatus('loading')
     try {
-      const portfolio = await fetchRh(apiKey, privateKey)
+      const portfolio = await fetchRh(apiKey, rhSession.getPrivateKey())
       localStorage.setItem(CACHE_KEY, JSON.stringify(portfolio))
       setData(portfolio)
       setStatus('ok')
@@ -125,7 +134,7 @@ export function useRobinhood(apiKey: string, privateKey: string) {
       } catch { /* ignore */ }
       setStatus('error')
     }
-  }, [apiKey, privateKey])
+  }, [apiKey])
 
   useEffect(() => { load() }, [load])
 

@@ -101,7 +101,6 @@ export function Home({ onNavigate }: Props) {
         {/* Robinhood portfolio */}
         <RobinhoodTile
           apiKey={settings.rhApiKey}
-          privateKey={settings.rhPrivateKey}
           onOpenSettings={() => onNavigate('more')}
         />
 

@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { useIdeasStore, useHabitsStore, useChatStore, useSettingsStore, useTasksStore, todayISO } from '../store'
+import { useState, useRef, useEffect } from 'react'
+import { useIdeasStore, useHabitsStore, useChatStore, useSettingsStore, useTasksStore, useEventsStore, todayISO } from '../store'
 import { Sheet } from '../components/Sheet'
 import { showToast } from '../components/Toast'
+import { rhSession } from '../hooks/useRobinhood'
 
 type SubView = 'ideas' | 'track' | 'review' | 'ai' | 'settings' | null
 
@@ -273,11 +274,77 @@ function ReviewView() {
 
 // ─── AI Chat ─────────────────────────────────────────────────────────────────
 
+import type { Settings } from '../store'
+
+function buildSystemPrompt(settings: Settings, contextData: {
+  openTaskCount: number; highPriorityTasks: string[]; water: number; sleep: number;
+  workout: boolean; nextEvent: string; weekTasksDone: number; workoutDays: number
+}) {
+  const base = `You are JARVIS, a concise personal AI operating system. Today is ${todayISO()}.`
+  const profile = settings.aboutMe ? `\n\nUSER PROFILE:\n${settings.aboutMe}` : ''
+  if (!settings.aiContextEnabled) return base + profile + '\n\nBe concise and direct.'
+
+  const { openTaskCount, highPriorityTasks, water, sleep, workout, nextEvent, weekTasksDone, workoutDays } = contextData
+  const context = `
+
+LIVE STATUS:
+- Open tasks: ${openTaskCount}${highPriorityTasks.length ? ` (high priority: ${highPriorityTasks.slice(0, 3).join(', ')})` : ''}
+- Today habits: 💧 ${water}/8 glasses · 💪 ${workout ? 'Workout done' : 'No workout yet'} · 😴 ${sleep > 0 ? `${sleep}h sleep` : 'Sleep not logged'}
+- Next event: ${nextEvent || 'None upcoming'}
+- This week: ${weekTasksDone} tasks completed · ${workoutDays}/7 workout days
+
+If you notice something worth flagging (sleep debt, overdue tasks, habit gaps) mention it. Keep responses short — user is on mobile.`
+
+  return base + profile + context
+}
+
 function AiView() {
   const { messages, addMessage, clearHistory } = useChatStore()
   const { settings } = useSettingsStore()
+  const tasks = useTasksStore((s) => s.tasks)
+  const { getDay, days } = useHabitsStore()
+  const events = useEventsStore((s) => s.events)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const [inputOffset, setInputOffset] = useState(0)
+
+  // Scroll to latest message whenever messages or loading changes
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  // Lift input above iOS keyboard using visualViewport
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const handler = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      setInputOffset(offset)
+    }
+    vv.addEventListener('resize', handler)
+    vv.addEventListener('scroll', handler)
+    return () => { vv.removeEventListener('resize', handler); vv.removeEventListener('scroll', handler) }
+  }, [])
+
+  const buildContext = () => {
+    const today = todayISO()
+    const day = getDay(today)
+    const last7 = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - i); return d.toISOString().slice(0, 10)
+    })
+    const openTasks = tasks.filter(t => t.status !== 'done')
+    const highPriority = openTasks.filter(t => t.priority === 'high').map(t => t.title)
+    const weekTasksDone = tasks.filter(t => t.status === 'done' && last7.includes(t.createdAt.slice(0, 10))).length
+    const workoutDays = days.filter(d => last7.includes(d.date) && d.workout).length
+    const nextEvent = events.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0]
+    return {
+      openTaskCount: openTasks.length, highPriorityTasks: highPriority,
+      water: day.water, sleep: day.sleep, workout: day.workout,
+      nextEvent: nextEvent ? `${nextEvent.title}${nextEvent.time ? ' at ' + nextEvent.time : ''}` : '',
+      weekTasksDone, workoutDays,
+    }
+  }
 
   const send = async () => {
     if (loading) return
@@ -291,6 +358,7 @@ function AiView() {
     setLoading(true)
     try {
       const history = messages.slice(-20).map((m) => ({ role: m.role, content: m.content }))
+      const systemPrompt = buildSystemPrompt(settings, buildContext())
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -302,13 +370,13 @@ function AiView() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1024,
-          system: 'You are Jarvis, a helpful personal assistant. Be concise and direct. Today is ' + todayISO(),
+          system: systemPrompt,
           messages: [...history, { role: 'user', content: text }],
         }),
       })
+      if (!res.ok) throw new Error(`API ${res.status}`)
       const json = await res.json() as { content?: { text: string }[] }
-      const reply = json.content?.[0]?.text ?? 'No response.'
-      addMessage({ role: 'assistant', content: reply })
+      addMessage({ role: 'assistant', content: json.content?.[0]?.text ?? 'No response.' })
     } catch {
       showToast('Error — check API key in Settings')
     } finally {
@@ -318,6 +386,14 @@ function AiView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Context badge */}
+      {settings.aiContextEnabled && (
+        <div style={{ fontSize: '0.7rem', color: 'var(--accent2)', background: 'var(--accent-soft)', borderRadius: 6, padding: '3px 8px', alignSelf: 'flex-start', marginBottom: 8 }}>
+          ⚡ Contextual mode — JARVIS sees your data
+        </div>
+      )}
+
+      {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 8 }}>
         {messages.length === 0 && (
           <div className="empty" style={{ marginTop: 40 }}>
@@ -332,6 +408,7 @@ function AiView() {
             borderRadius: m.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
             padding: '10px 14px', fontSize: '0.9rem', lineHeight: 1.6,
             color: m.role === 'user' ? '#fff' : 'var(--t1)',
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           }}>
             {m.content}
           </div>
@@ -341,17 +418,23 @@ function AiView() {
             <div className="spinner" />
           </div>
         )}
+        {/* Scroll anchor */}
+        <div ref={bottomRef} />
       </div>
-      <div style={{ display: 'flex', gap: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-        <input value={input} onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
-          placeholder="Ask Jarvis…" style={{ flex: 1 }} />
-        <button className="btn btn-primary" onClick={send} disabled={!input.trim()}>↑</button>
+
+      {/* Input — lifts above iOS keyboard via inputOffset */}
+      <div style={{ paddingBottom: inputOffset, transition: 'padding-bottom 0.15s' }}>
+        <div style={{ display: 'flex', gap: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+          <input value={input} onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+            placeholder="Ask Jarvis…" style={{ flex: 1 }} />
+          <button className="btn btn-primary" onClick={send} disabled={!input.trim()}>↑</button>
+        </div>
+        {messages.length > 0 && (
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 8, width: '100%' }}
+            onClick={() => { clearHistory(); showToast('History cleared') }}>Clear history</button>
+        )}
       </div>
-      {messages.length > 0 && (
-        <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}
-          onClick={() => { clearHistory(); showToast('History cleared') }}>Clear history</button>
-      )}
     </div>
   )
 }
@@ -362,11 +445,15 @@ function SettingsView() {
   const { settings, updateSettings } = useSettingsStore()
   const [apiKey, setApiKey] = useState(settings.claudeApiKey)
   const [modules, setModules] = useState(settings.workModules.join(', '))
+  const [aboutMe, setAboutMe] = useState(settings.aboutMe)
   const [rhApiKey, setRhApiKey] = useState(settings.rhApiKey)
-  const [rhPrivateKey, setRhPrivateKey] = useState(settings.rhPrivateKey)
+  const [rhPrivateKey, setRhPrivateKey] = useState('')   // never pre-filled from store
+  const hasStoredPk = rhSession.hasKey()
 
   return (
     <div className="col" style={{ gap: 16 }}>
+
+      {/* Claude API Key */}
       <div>
         <label style={{ fontSize: '0.8rem', color: 'var(--t3)', fontWeight: 600, display: 'block', marginBottom: 6 }}>
           ANTHROPIC API KEY
@@ -379,6 +466,7 @@ function SettingsView() {
         </button>
       </div>
 
+      {/* Work modules */}
       <div>
         <label style={{ fontSize: '0.8rem', color: 'var(--t3)', fontWeight: 600, display: 'block', marginBottom: 6 }}>
           WORK MODULES (comma-separated)
@@ -395,6 +483,56 @@ function SettingsView() {
 
       <div className="divider" />
 
+      {/* About me — JARVIS personal context */}
+      <div>
+        <label style={{ fontSize: '0.8rem', color: 'var(--t3)', fontWeight: 600, display: 'block', marginBottom: 4 }}>
+          ABOUT ME
+        </label>
+        <p style={{ fontSize: '0.72rem', color: 'var(--t3)', marginBottom: 6 }}>
+          Injected into every AI prompt so JARVIS knows who you are.
+        </p>
+        <textarea value={aboutMe} onChange={(e) => setAboutMe(e.target.value)}
+          placeholder="I'm a software engineer. Goals: 8h sleep, exercise 5x/week. Name: Brendan. Keep answers short."
+          style={{ minHeight: 72 }} />
+        <button className="btn btn-ghost" style={{ marginTop: 8, width: '100%' }}
+          onClick={() => { updateSettings({ aboutMe }); showToast('Profile saved') }}>
+          Save Profile
+        </button>
+      </div>
+
+      {/* AI Context toggle */}
+      <div style={{ background: 'var(--bg-2)', borderRadius: 'var(--radius)', padding: 14, border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>⚡ Contextual AI</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--t3)', marginTop: 2 }}>
+              Let JARVIS see your tasks, habits &amp; portfolio
+            </div>
+          </div>
+          <button
+            onClick={() => updateSettings({ aiContextEnabled: !settings.aiContextEnabled })}
+            style={{
+              width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
+              background: settings.aiContextEnabled ? 'var(--accent)' : 'var(--bg-4)',
+              position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 3, left: settings.aiContextEnabled ? 21 : 3,
+              width: 20, height: 20, borderRadius: '50%', background: '#fff',
+              transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            }} />
+          </button>
+        </div>
+        {settings.aiContextEnabled && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--t3)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+            📤 When ON: task counts, habit totals, and next event are sent to Anthropic with each message. Raw task titles included. Turn off to use JARVIS without data sharing.
+          </div>
+        )}
+      </div>
+
+      <div className="divider" />
+
       {/* Robinhood API credentials */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -404,33 +542,27 @@ function SettingsView() {
         <label style={{ fontSize: '0.75rem', color: 'var(--t3)', display: 'block', marginBottom: 4 }}>
           API KEY (from Robinhood → Account → API)
         </label>
-        <input
-          type="password"
-          value={rhApiKey}
-          onChange={(e) => setRhApiKey(e.target.value)}
-          placeholder="rh-api-…"
-          style={{ marginBottom: 8 }}
-        />
+        <input type="password" value={rhApiKey} onChange={(e) => setRhApiKey(e.target.value)}
+          placeholder="rh-api-…" style={{ marginBottom: 8 }} />
         <label style={{ fontSize: '0.75rem', color: 'var(--t3)', display: 'block', marginBottom: 4 }}>
-          PRIVATE KEY (base64 Ed25519)
+          PRIVATE KEY (base64 Ed25519) — <span style={{ color: 'var(--green)' }}>session only, never saved to disk</span>
         </label>
-        <input
-          type="password"
-          value={rhPrivateKey}
-          onChange={(e) => setRhPrivateKey(e.target.value)}
-          placeholder="base64-encoded private key…"
-          style={{ marginBottom: 8 }}
-        />
-        <button
-          className="btn btn-ghost"
-          style={{ width: '100%' }}
+        {hasStoredPk && !rhPrivateKey && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--green)', marginBottom: 6 }}>
+            ✓ Key stored for this session. Enter a new one to replace it.
+          </div>
+        )}
+        <input type="password" value={rhPrivateKey} onChange={(e) => setRhPrivateKey(e.target.value)}
+          placeholder={hasStoredPk ? '(stored — enter to replace)' : 'base64-encoded private key…'}
+          style={{ marginBottom: 8 }} />
+        <button className="btn btn-ghost" style={{ width: '100%' }}
           onClick={() => {
-            updateSettings({ rhApiKey: rhApiKey.trim(), rhPrivateKey: rhPrivateKey.trim() })
-            // Clear stale cache so tile refetches immediately
+            updateSettings({ rhApiKey: rhApiKey.trim() })
+            if (rhPrivateKey.trim()) rhSession.setPrivateKey(rhPrivateKey.trim())
             localStorage.removeItem('jarvis-rh-cache')
             showToast('📈 Robinhood credentials saved')
-          }}
-        >
+            setRhPrivateKey('')
+          }}>
           Save Robinhood Keys
         </button>
       </div>
